@@ -51,6 +51,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { DisqusComments } from './DisqusComments';
+import { ErrorBoundary } from './ErrorBoundary';
 
 interface ResultScreenProps {
   item: ApodItem;
@@ -1252,7 +1253,9 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
       </div>
 
       {/* COSMIC COMMUNITY DISCUSSION (DISQUS UNIVERSAL EMBED) */}
-      <DisqusComments date={item.date} title={item.title} />
+      <ErrorBoundary fallbackTitle="Cosmic Discussion Offline">
+        <DisqusComments date={item.date} title={item.title} />
+      </ErrorBoundary>
     </div>
   );
 };

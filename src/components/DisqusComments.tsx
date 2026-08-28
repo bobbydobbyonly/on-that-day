@@ -18,50 +18,67 @@ declare global {
 
 export const DisqusComments: React.FC<DisqusCommentsProps> = ({ date, title }) => {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const [key, setKey] = useState(0);
 
   useEffect(() => {
-    // Construct canonical URL and page identifier for this specific astronomical date
-    const canonicalOrigin = window.location.origin || 'https://on-that-day.app';
-    const pageUrl = `${canonicalOrigin}/?date=${date}`;
-    const pageIdentifier = `apod-${date}`;
-    const pageTitle = `${title} (${formatFriendlyDate(date)}) - On That Day`;
+    setHasError(false);
 
-    // Configure Disqus
-    const configFn = function (this: any) {
-      this.page.url = pageUrl;
-      this.page.identifier = pageIdentifier;
-      this.page.title = pageTitle;
-    };
+    try {
+      // Construct canonical URL and page identifier for this specific astronomical date
+      const canonicalOrigin = window.location.origin || 'https://on-that-day.app';
+      const pageUrl = `${canonicalOrigin}/?date=${date}`;
+      const pageIdentifier = `apod-${date}`;
+      const pageTitle = `${title} (${formatFriendlyDate(date)}) - On That Day`;
 
-    window.disqus_config = configFn;
+      // Configure Disqus
+      const configFn = function (this: any) {
+        this.page.url = pageUrl;
+        this.page.identifier = pageIdentifier;
+        this.page.title = pageTitle;
+      };
 
-    // If Disqus script is already loaded in the document, reset with the new date's thread
-    if (window.DISQUS && typeof window.DISQUS.reset === 'function') {
-      try {
-        window.DISQUS.reset({
-          reload: true,
-          config: configFn,
-        });
-        setIsLoaded(true);
-      } catch (err) {
-        console.warn('Failed to reset Disqus:', err);
-      }
-    } else {
-      // Check if script tag already exists
-      const existingScript = document.getElementById('disqus-embed-script');
-      if (!existingScript) {
-        const d = document;
-        const s = d.createElement('script');
-        s.id = 'disqus-embed-script';
-        s.src = 'https://on-that-day.disqus.com/embed.js';
-        s.setAttribute('data-timestamp', String(+new Date()));
-        s.async = true;
-        s.onload = () => setIsLoaded(true);
-        (d.head || d.body).appendChild(s);
+      window.disqus_config = configFn;
+
+      // If Disqus script is already loaded in the document, reset with the new date's thread
+      if (window.DISQUS && typeof window.DISQUS.reset === 'function') {
+        try {
+          window.DISQUS.reset({
+            reload: true,
+            config: configFn,
+          });
+          setIsLoaded(true);
+        } catch (err) {
+          console.warn('Failed to reset Disqus:', err);
+          setHasError(true);
+        }
       } else {
-        setIsLoaded(true);
+        // Check if script tag already exists
+        const existingScript = document.getElementById('disqus-embed-script');
+        if (!existingScript) {
+          const d = document;
+          const s = d.createElement('script');
+          s.id = 'disqus-embed-script';
+          s.src = 'https://on-that-day.disqus.com/embed.js';
+          s.setAttribute('data-timestamp', String(+new Date()));
+          s.async = true;
+          s.onload = () => {
+            setIsLoaded(true);
+            setHasError(false);
+          };
+          s.onerror = () => {
+            console.warn('Disqus embed script blocked or unavailable in this environment.');
+            setHasError(true);
+            setIsLoaded(false);
+          };
+          (d.head || d.body).appendChild(s);
+        } else {
+          setIsLoaded(true);
+        }
       }
+    } catch (err) {
+      console.warn('Disqus initialization error:', err);
+      setHasError(true);
     }
   }, [date, title, key]);
 
@@ -125,8 +142,28 @@ export const DisqusComments: React.FC<DisqusCommentsProps> = ({ date, title }) =
       </div>
 
       {/* The Disqus container */}
-      <div className="relative z-10 min-h-[220px]">
+      <div className="relative z-10 min-h-[180px]">
         <div id="disqus_thread" className="w-full text-[#e4dffc]" />
+
+        {hasError && (
+          <div className="p-4 sm:p-5 rounded-xl bg-black/40 border border-white/10 text-xs text-[#d6c4ac] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-3">
+            <div>
+              <p className="text-white font-medium">Comments embed paused</p>
+              <p className="text-[#d6c4ac]/80 mt-0.5">
+                Embedded comments may be shielded inside preview iframes or ad-blockers. You can join the cosmic thread directly on Disqus.
+              </p>
+            </div>
+            <a
+              href={`https://on-that-day.disqus.com`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#ffd79b]/15 hover:bg-[#ffd79b]/25 border border-[#ffd79b]/30 text-[#ffd79b] font-medium text-xs transition-colors shrink-0"
+            >
+              <span>Open on Disqus</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        )}
 
         <noscript>
           <div className="p-4 rounded-xl bg-black/40 border border-white/10 text-xs text-[#d6c4ac]">
