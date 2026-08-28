@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ApodItem, FavoriteDate } from '../types';
+import { ApodItem, FavoriteDate, PublicHoliday } from '../types';
 import {
   formatFriendlyDate,
   getDaysAgoText,
@@ -13,6 +13,11 @@ import {
   stopSpeaking,
   isSpeaking,
 } from '../utils/audioSynth';
+import {
+  fetchHolidayForDate,
+  fetchHolidaysForYear,
+  SUPPORTED_COUNTRIES,
+} from '../services/holidayService';
 import {
   Sparkles,
   Maximize2,
@@ -29,9 +34,13 @@ import {
   Orbit,
   ExternalLink,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Info,
   Layers,
   BookOpen,
+  PartyPopper,
+  Globe,
 } from 'lucide-react';
 
 interface ResultScreenProps {
@@ -43,6 +52,7 @@ interface ResultScreenProps {
   onOpenKeepsake: () => void;
   onSelectDate: (date: string) => void;
   isLoading: boolean;
+  onHolidayLoaded?: (holiday: PublicHoliday | null) => void;
 }
 
 type TabType = 'story' | 'keepsake' | 'context' | 'milestones';
@@ -56,15 +66,81 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   onOpenKeepsake,
   onSelectDate,
   isLoading,
+  onHolidayLoaded,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('story');
   const [isPlayingNarration, setIsPlayingNarration] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Terrestrial Holiday State
+  const [selectedCountry, setSelectedCountry] = useState<string>(() => {
+    try {
+      return localStorage.getItem('apod_country_code') || 'SG';
+    } catch {
+      return 'SG';
+    }
+  });
+  const [holiday, setHoliday] = useState<PublicHoliday | null>(null);
+  const [yearHolidays, setYearHolidays] = useState<PublicHoliday[]>([]);
+  const [showYearHolidays, setShowYearHolidays] = useState(false);
+  const [customCountryInput, setCustomCountryInput] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+
   const moon = calculateMoonPhase(item.date);
   const zodiac = getZodiacSign(item.date);
   const daysAgo = getDaysAgoText(item.date);
   const cosmicBadge = getCosmicBadge(item.date, item.title);
+
+  // Fetch holiday data from the backend connection (/api/holidays)
+  useEffect(() => {
+    let isMounted = true;
+
+    fetchHolidayForDate(item.date, selectedCountry)
+      .then((h) => {
+        if (isMounted) {
+          setHoliday(h);
+          onHolidayLoaded?.(h);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setHoliday(null);
+          onHolidayLoaded?.(null);
+        }
+      });
+
+    const year = parseInt(item.date.split('-')[0], 10);
+    if (!isNaN(year)) {
+      fetchHolidaysForYear(year, selectedCountry).then((list) => {
+        if (isMounted) {
+          setYearHolidays(list);
+        }
+      });
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [item.date, selectedCountry]);
+
+  // Handle country ISO change
+  const handleSelectCountry = (code: string) => {
+    const normalized = code.trim().toUpperCase();
+    if (/^[A-Z]{2}$/.test(normalized)) {
+      setSelectedCountry(normalized);
+      try {
+        localStorage.setItem('apod_country_code', normalized);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  const currentCountryMeta = SUPPORTED_COUNTRIES.find((c) => c.code === selectedCountry) || {
+    code: selectedCountry,
+    name: selectedCountry,
+    flag: '🌐',
+  };
 
   // Reset speech when changing dates
   useEffect(() => {
@@ -123,8 +199,19 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
             id="apod-image-card"
             className="group relative rounded-2xl overflow-hidden glass-card border border-white/15 shadow-2xl transition-all duration-300"
           >
-            {/* Corner Holiday / Cosmic Event Badge (pinned per design system) */}
-            <div className="absolute top-3 left-3 z-20 pointer-events-none">
+            {/* Corner Holiday / Cosmic Event Badges (pinned per design system) */}
+            <div className="absolute top-3 left-3 z-20 pointer-events-auto flex flex-wrap items-center gap-2 max-w-[80%]">
+              {holiday && (
+                <span
+                  id="holiday-event-badge"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide backdrop-blur-md shadow-lg border bg-[#bd06da]/60 text-[#fff0fb] border-[#faabff]/70 shadow-[#bd06da]/40 transition-all hover:bg-[#bd06da]/80"
+                  title={`Public Holiday in ${currentCountryMeta.name} (${holiday.countryCode}): ${holiday.name} (${holiday.localName})`}
+                >
+                  <PartyPopper className="w-3.5 h-3.5 text-[#ffd79b]" />
+                  <span>{currentCountryMeta.flag} {holiday.name}</span>
+                </span>
+              )}
+
               <span
                 id="cosmic-event-badge"
                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide backdrop-blur-md shadow-lg border ${
@@ -547,6 +634,174 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                     <p className="text-[11px] text-[#d6c4ac]/70">
                       {daysAgo} have passed since this exact view was chronicled into NASA’s daily registry.
                     </p>
+                  </div>
+                </div>
+
+                {/* Terrestrial Public Holiday & Cultural Calendar (Powered by /api/holidays) */}
+                <div id="holiday-context-card" className="p-4 rounded-xl bg-[#161327] border border-white/10 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-[#bd06da]/20 border border-[#faabff]/40 flex items-center justify-center text-[#faabff]">
+                        <PartyPopper className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h5 className="text-xs font-semibold text-white flex items-center gap-1.5">
+                          <span>Terrestrial Public Holidays</span>
+                          <span className="text-[9px] text-[#85edff] font-mono bg-[#85edff]/10 px-1.5 py-0.5 rounded border border-[#85edff]/20">
+                            /api/holidays
+                          </span>
+                        </h5>
+                        <p className="text-[10px] text-[#d6c4ac]/70">
+                          Civil calendar events in {currentCountryMeta.flag} {currentCountryMeta.name}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Country Code Switcher */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <select
+                        id="country-iso-select"
+                        value={selectedCountry}
+                        onChange={(e) => handleSelectCountry(e.target.value)}
+                        className="bg-[#131125] text-xs text-[#ffd79b] border border-white/20 rounded-lg px-2 py-1 outline-none focus:border-[#ffd79b]"
+                      >
+                        {SUPPORTED_COUNTRIES.map((c) => (
+                          <option key={c.code} value={c.code} className="bg-[#131125] text-[#ffd79b]">
+                            {c.flag} {c.code} ({c.name})
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        id="custom-iso-toggle-btn"
+                        onClick={() => setShowCustomInput(!showCustomInput)}
+                        className="text-[10px] text-[#85edff] hover:underline px-1 py-0.5"
+                      >
+                        {showCustomInput ? 'Cancel' : 'Swap ISO...'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Optional Custom ISO Code Prompt */}
+                  {showCustomInput && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-black/40 border border-[#85edff]/30 text-xs">
+                      <input
+                        type="text"
+                        placeholder="2-letter ISO (e.g. DE, JP, FR)"
+                        maxLength={2}
+                        value={customCountryInput}
+                        onChange={(e) => setCustomCountryInput(e.target.value.toUpperCase())}
+                        className="bg-transparent text-white px-2 py-1 uppercase font-mono tracking-widest outline-none border-b border-[#85edff]/50 w-28 text-center"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (customCountryInput.trim().length === 2) {
+                            handleSelectCountry(customCountryInput);
+                            setShowCustomInput(false);
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded bg-[#85edff]/20 hover:bg-[#85edff]/30 text-[#85edff] text-xs font-medium transition-colors"
+                      >
+                        Apply ISO
+                      </button>
+                      <span className="text-[10px] text-[#d6c4ac]/60">
+                        Swap SG for any ISO code
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Active Holiday on this Date */}
+                  {holiday ? (
+                    <div className="p-3 rounded-lg bg-gradient-to-r from-[#bd06da]/20 to-[#432c00]/30 border border-[#faabff]/40 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-[#faabff] flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-[#ffd79b]" />
+                          Official Public Holiday in {currentCountryMeta.name} ({holiday.countryCode})
+                        </span>
+                        <span className="text-[10px] font-mono text-[#ffd79b] bg-black/40 px-2 py-0.5 rounded">
+                          {holiday.date}
+                        </span>
+                      </div>
+                      <p className="text-sm font-serif font-bold text-white">
+                        {currentCountryMeta.flag} {holiday.name}
+                      </p>
+                      {holiday.localName && holiday.localName !== holiday.name && (
+                        <p className="text-xs text-[#ffd79b]/80 italic">
+                          Local Name: {holiday.localName}
+                        </p>
+                      )}
+                      <p className="text-[11px] text-[#d6c4ac]/90 leading-relaxed pt-1">
+                        While citizens on Earth celebrated {holiday.name}, light from the heavens was captured by NASA instruments to form this astronomical heirloom.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-white/5 border border-white/5 space-y-1">
+                      <div className="flex items-center justify-between text-xs text-[#d6c4ac]">
+                        <span>Civic Calendar in {currentCountryMeta.flag} {currentCountryMeta.name}:</span>
+                        <span className="text-[11px] text-[#ffd79b] font-medium">Regular Civil Day</span>
+                      </div>
+                      <p className="text-[11px] text-[#d6c4ac]/70">
+                        No official public holiday was recorded on {item.date} in {currentCountryMeta.name}.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Year Holiday Explorer Dropdown */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      id="toggle-year-holidays-btn"
+                      onClick={() => setShowYearHolidays(!showYearHolidays)}
+                      className="w-full flex items-center justify-between text-xs text-[#d6c4ac] hover:text-[#ffd79b] py-1 transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-[#ffd79b]" />
+                        <span>All Public Holidays in {item.date.split('-')[0]} for {currentCountryMeta.name} ({yearHolidays.length})</span>
+                      </span>
+                      {showYearHolidays ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+
+                    {showYearHolidays && (
+                      <div className="mt-2 max-h-48 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                        {yearHolidays.length === 0 ? (
+                          <p className="text-[11px] text-[#d6c4ac]/60 italic py-1">
+                            Loading public holidays for {currentCountryMeta.code}...
+                          </p>
+                        ) : (
+                          yearHolidays.map((h, idx) => {
+                            const isCurrent = h.date === item.date;
+                            return (
+                              <div
+                                key={`${h.date}-${idx}`}
+                                onClick={() => onSelectDate(h.date)}
+                                title={`Jump to APOD for ${h.date}`}
+                                className={`p-2 rounded-lg flex items-center justify-between cursor-pointer transition-all ${
+                                  isCurrent
+                                    ? 'bg-[#bd06da]/30 border border-[#faabff]/60 text-white font-semibold'
+                                    : 'bg-black/30 hover:bg-white/10 border border-white/5 text-[#d6c4ac] hover:text-white'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-[10px] text-[#ffd79b]">
+                                    {h.date}
+                                  </span>
+                                  <span>{h.name}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-[10px] text-[#85edff]">
+                                  {isCurrent ? (
+                                    <span className="text-[#ffd79b] font-medium">Viewing Now</span>
+                                  ) : (
+                                    <span>Explore APOD →</span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

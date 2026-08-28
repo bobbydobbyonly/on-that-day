@@ -1,18 +1,22 @@
 import React, { useState } from 'react';
-import { ApodItem, MoonPhaseInfo } from '../types';
+import { ApodItem, MoonPhaseInfo, PublicHoliday } from '../types';
 import { formatFriendlyDate, getZodiacSign, calculateMoonPhase } from '../utils/astronomyUtils';
-import { Sparkles, Award, Share2, Copy, Check, Printer, X, Heart } from 'lucide-react';
+import { Sparkles, Award, Share2, Copy, Check, Printer, X, Heart, Calendar } from 'lucide-react';
 
 interface KeepsakeCardProps {
   item: ApodItem;
   userName: string;
   onClose: () => void;
+  holiday?: PublicHoliday | null;
+  countryName?: string;
 }
 
 export const KeepsakeCard: React.FC<KeepsakeCardProps> = ({
   item,
   userName,
   onClose,
+  holiday,
+  countryName = 'Singapore',
 }) => {
   const [copied, setCopied] = useState(false);
   const [dedication, setDedication] = useState(
@@ -22,7 +26,10 @@ export const KeepsakeCard: React.FC<KeepsakeCardProps> = ({
   const zodiac = getZodiacSign(item.date);
 
   const handleCopyText = () => {
-    const text = `✦ HEIRLOOM OF THE COSMOS ✦\nDedicated to: ${userName}\nCelestial Date: ${formatFriendlyDate(item.date)}\nCosmic Event: ${item.title}\nMoon Phase: ${moon.phaseName} (${moon.illumination}% lit)\nConstellation: ${zodiac}\n"${dedication}"\nArchive: NASA Astronomy Picture of the Day\nDiscovered on "On That Day"`;
+    const holidayLine = holiday
+      ? `Terrestrial Holiday: ${holiday.name} (${holiday.countryCode})\n`
+      : '';
+    const text = `✦ HEIRLOOM OF THE COSMOS ✦\nDedicated to: ${userName}\nCelestial Date: ${formatFriendlyDate(item.date)}\nCosmic Event: ${item.title}\n${holidayLine}Moon Phase: ${moon.phaseName} (${moon.illumination}% lit)\nConstellation: ${zodiac}\n"${dedication}"\nArchive: NASA Astronomy Picture of the Day\nDiscovered on "On That Day"`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
@@ -119,6 +126,15 @@ export const KeepsakeCard: React.FC<KeepsakeCardProps> = ({
                   <span className="text-[#d6c4ac]/80">Solar Constellation:</span>
                   <span className="font-medium text-[#faabff]">{zodiac}</span>
                 </div>
+                {holiday && (
+                  <div className="flex justify-between py-1 border-b border-white/5">
+                    <span className="text-[#d6c4ac]/80">Terrestrial Holiday:</span>
+                    <span className="font-medium text-[#ffc6fd] flex items-center gap-1">
+                      <span>{holiday.name}</span>
+                      <span className="text-[10px] text-[#ffd79b]/80">({holiday.countryCode})</span>
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between py-1 border-b border-white/5">
                   <span className="text-[#d6c4ac]/80">Archive Heritage:</span>
                   <span className="font-medium text-white/90">Official APOD Registry</span>

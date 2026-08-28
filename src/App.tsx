@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ApodItem, UserSession, FavoriteDate } from './types';
+import { ApodItem, UserSession, FavoriteDate, PublicHoliday } from './types';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import { CosmicHeader } from './components/CosmicHeader';
 import { ResultScreen } from './components/ResultScreen';
@@ -46,6 +46,7 @@ export default function App() {
   const [showLightbox, setShowLightbox] = useState(false);
   const [showKeepsake, setShowKeepsake] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [activeHoliday, setActiveHoliday] = useState<PublicHoliday | null>(null);
 
   // Load APOD whenever session date changes (when not in initial setup)
   useEffect(() => {
@@ -187,6 +188,7 @@ export default function App() {
           onOpenKeepsake={() => setShowKeepsake(true)}
           onSelectDate={handleDateChange}
           isLoading={isLoading}
+          onHolidayLoaded={setActiveHoliday}
         />
       </main>
 
@@ -207,6 +209,7 @@ export default function App() {
         <KeepsakeCard
           item={apodItem}
           userName={session.name || 'Stargazer'}
+          holiday={activeHoliday}
           onClose={() => setShowKeepsake(false)}
         />
       )}
