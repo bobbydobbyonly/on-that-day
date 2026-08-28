@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Literata", Georgia, serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --color-cosmic-bg: #131125;
+  --color-surface: #131125;
+  --color-surface-dim: #131125;
+  --color-surface-bright: #39374d;
+  --color-surface-container-lowest: #0e0c20;
+  --color-surface-container-low: #1b192e;
+  --color-surface-container: #1f1d32;
+  --color-surface-container-high: #2a273d;
+  --color-surface-container-highest: #353248;
+  --color-on-surface: #e4dffc;
+  --color-on-surface-variant: #d6c4ac;
+  --color-primary: #ffd79b;
+  --color-primary-container: #ffb300;
+  --color-on-primary: #432c00;
+  --color-on-primary-container: #6b4900;
+  --color-secondary: #faabff;
+  --color-secondary-container: #bd06da;
+  --color-tertiary: #85edff;
+  --color-tertiary-container: #00d5ed;
+  --color-primary-fixed-dim: #ffba38;
+}
+
+@layer utilities {
+  .cosmic-gradient {
+    background: radial-gradient(circle at top right, rgba(0, 213, 237, 0.14), transparent 45%),
+                radial-gradient(circle at bottom left, rgba(189, 6, 218, 0.15), transparent 45%),
+                #131125;
+  }
+  
+  .glass-card {
+    background: rgba(255, 255, 255, 0.045);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    border-right: 1px solid rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  .glass-card-raised {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+  }
+
+  .glow-button {
+    box-shadow: 0 0 20px rgba(255, 179, 0, 0.35);
+  }
+  
+  .glow-button:hover {
+    box-shadow: 0 0 32px rgba(255, 179, 0, 0.6);
+  }
+
+  .glow-secondary {
+    box-shadow: 0 0 20px rgba(250, 171, 255, 0.25);
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(133, 237, 255, 0.25);
+  }
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #131125;
+}
+::-webkit-scrollbar-thumb {
+  background: #353248;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #ffd79b;
+}
+

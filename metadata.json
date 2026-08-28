@@ -1,0 +1,7 @@
+{
+  "name": "On That Day",
+  "description": "Discover what the cosmos looked like on your special date through NASA's Astronomy Picture of the Day archive.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
