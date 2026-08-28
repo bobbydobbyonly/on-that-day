@@ -30,23 +30,25 @@ export async function fetchApodByDate(dateStr: string): Promise<ApodItem> {
     return item;
   }
 
-  // 3. Attempt to fetch from NASA APOD API using DEMO_KEY with timeout
+  // 3. Attempt to fetch from secure backend proxy (/api/apod)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6500);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   try {
-    const url = `https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&date=${dateStr}`;
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(`/api/apod?date=${encodeURIComponent(dateStr)}&thumbs=true`, {
+      signal: controller.signal,
+    });
     clearTimeout(timeoutId);
 
     if (response.ok) {
       const data = await response.json();
+      const mediaUrl = (data.media_type === 'video' && data.thumbnail_url) ? data.thumbnail_url : (data.url || '');
       const apodItem: ApodItem = {
         date: data.date || dateStr,
         title: data.title || `Cosmic Horizon of ${dateStr}`,
         explanation: data.explanation || 'An astronomical vista captured across the starry vault of heaven.',
-        url: data.url || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1400&q=85',
-        hdurl: data.hdurl || data.url,
+        url: mediaUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1400&q=85',
+        hdurl: data.hdurl || mediaUrl || data.url,
         media_type: data.media_type || 'image',
         copyright: data.copyright || 'NASA / APOD Archive',
       };
@@ -58,10 +60,13 @@ export async function fetchApodByDate(dateStr: string): Promise<ApodItem> {
       }
 
       return apodItem;
+    } else {
+      const errPayload = await response.json().catch(() => null);
+      console.info('Backend APOD proxy response:', response.status, errPayload);
     }
   } catch (err) {
     clearTimeout(timeoutId);
-    console.info('NASA API call unfulfilled (rate limit or offline); generating curated celestial record:', err);
+    console.info('Backend API call unfulfilled; using curated celestial record:', err);
   }
 
   // 4. Fallback generator for un-cached dates when NASA rate limits out
