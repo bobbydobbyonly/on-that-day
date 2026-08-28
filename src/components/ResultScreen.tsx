@@ -48,7 +48,9 @@ import {
   RefreshCw,
   Copy,
   Languages,
+  MessageSquare,
 } from 'lucide-react';
+import { DisqusComments } from './DisqusComments';
 
 interface ResultScreenProps {
   item: ApodItem;
@@ -272,6 +274,13 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
     }
   };
 
+  const scrollToDiscussion = () => {
+    const el = document.getElementById('cosmic-discussion-section');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   return (
     <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 py-6 md:py-8 antialiased">
       {/* Loading Overlay */}
@@ -408,7 +417,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
           </div>
 
           {/* Quick Action Bar under Media */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
             <button
               onClick={onOpenLightbox}
               id="action-zoom-hd"
@@ -460,6 +469,16 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                   <span>Read Aloud</span>
                 </>
               )}
+            </button>
+
+            <button
+              onClick={scrollToDiscussion}
+              id="action-discuss"
+              className="glass-card hover:bg-white/10 hover:border-[#ffd79b]/40 p-2.5 rounded-xl flex items-center justify-center gap-2 text-xs font-medium text-[#ffd79b] transition-all cursor-pointer col-span-2 sm:col-span-1"
+              title="Join the cosmic community discussion on Disqus"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-[#ffd79b]" />
+              <span>Discuss</span>
             </button>
           </div>
         </div>
@@ -521,6 +540,16 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
             >
               <Layers className="w-3.5 h-3.5" />
               <span>Milestones</span>
+            </button>
+
+            <button
+              id="tab-btn-discussion"
+              onClick={scrollToDiscussion}
+              className="flex-1 py-2 px-3 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 flex items-center justify-center gap-1.5 text-[#ffd79b] hover:text-white hover:bg-white/5 cursor-pointer"
+              title="Jump to Disqus Discussion"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-[#ffd79b]" />
+              <span>Discuss</span>
             </button>
           </div>
 
@@ -828,6 +857,22 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                 <span className="px-2.5 py-1 rounded-lg bg-[#2a273d] text-[#ffd79b] border border-white/10">
                   ★ NASA Registry
                 </span>
+              </div>
+
+              {/* Community Discussion Shortcut */}
+              <div className="pt-2 flex items-center justify-between gap-3 text-xs bg-[#161224] p-3.5 rounded-xl border border-white/10">
+                <div className="flex items-center gap-2 min-w-0">
+                  <MessageSquare className="w-4 h-4 text-[#ffd79b] shrink-0" />
+                  <span className="text-[#e4dffc] truncate">Have memories or thoughts on this celestial date?</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={scrollToDiscussion}
+                  className="px-3 py-1.5 rounded-full bg-[#ffd79b]/15 hover:bg-[#ffd79b]/25 border border-[#ffd79b]/30 text-[#ffd79b] font-medium text-xs transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Join Discussion</span>
+                  <ChevronDown className="w-3 h-3" />
+                </button>
               </div>
             </div>
           )}
@@ -1205,6 +1250,9 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
           )}
         </div>
       </div>
+
+      {/* COSMIC COMMUNITY DISCUSSION (DISQUS UNIVERSAL EMBED) */}
+      <DisqusComments date={item.date} title={item.title} />
     </div>
   );
 };
