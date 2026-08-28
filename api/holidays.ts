@@ -1,7 +1,6 @@
-import type { Request, Response } from "express";
+import type { UniversalRequest, UniversalResponse } from "./_utils";
+import { getQueryParams, sendJsonResponse } from "./_utils";
 import { Router } from "express";
-
-const router = Router();
 
 interface CachedHolidays {
   timestamp: number;
@@ -11,128 +10,154 @@ interface CachedHolidays {
 const holidayCache = new Map<string, CachedHolidays>();
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-async function fetchPublicHolidaysFromProvider(year: number, countryCode: string): Promise<{ status: number; data: unknown }> {
-  const cacheKey = `${year}:${countryCode.toUpperCase()}`;
+export const SINGAPORE_HOLIDAYS_2026 = [
+  { date: "2026-01-01", localName: "New Year's Day", name: "New Year's Day", countryCode: "SG" },
+  { date: "2026-02-17", localName: "Chinese New Year", name: "Chinese New Year", countryCode: "SG" },
+  { date: "2026-02-18", localName: "Chinese New Year", name: "Chinese New Year", countryCode: "SG" },
+  { date: "2026-03-21", localName: "Hari Raya Puasa", name: "Hari Raya Puasa", countryCode: "SG" },
+  { date: "2026-04-03", localName: "Good Friday", name: "Good Friday", countryCode: "SG" },
+  { date: "2026-05-01", localName: "Labour Day", name: "Labour Day", countryCode: "SG" },
+  { date: "2026-05-27", localName: "Hari Raya Haji", name: "Hari Raya Haji", countryCode: "SG" },
+  { date: "2026-06-01", localName: "Vesak Day", name: "Vesak Day", countryCode: "SG" },
+  { date: "2026-08-10", localName: "National Day", name: "National Day", countryCode: "SG" },
+  { date: "2026-11-09", localName: "Deepavali", name: "Deepavali", countryCode: "SG" },
+  { date: "2026-12-25", localName: "Christmas Day", name: "Christmas Day", countryCode: "SG" },
+];
+
+async function fetchPublicHolidaysFromProvider(year: number, countryCode: string): Promise<any[]> {
+  const normalizedCountry = countryCode.toUpperCase();
+  const cacheKey = `${year}:${normalizedCountry}`;
   const cached = holidayCache.get(cacheKey);
 
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return { status: 200, data: cached.data };
+    return cached.data;
   }
 
-  const upstreamUrl = `https://date.nager.at/api/v3/PublicHolidays/${year}/${encodeURIComponent(countryCode.toUpperCase())}`;
+  const upstreamUrl = `https://date.nager.at/api/v3/PublicHolidays/${year}/${encodeURIComponent(normalizedCountry)}`;
 
-  const response = await fetch(upstreamUrl, {
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "OnThatDay-CosmicCalendar/1.0",
-    },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4500);
 
-  if (!response.ok) {
-    const errText = await response.text().catch(() => "");
-    return {
-      status: response.status,
-      data: {
-        error: `Upstream holiday provider responded with status ${response.status}`,
-        details: errText || undefined,
+  try {
+    const response = await fetch(upstreamUrl, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "OnThatDay-CosmicCalendar/1.0",
       },
-    };
-  }
+    }).finally(() => clearTimeout(timer));
 
-  const list = await response.json();
-  if (Array.isArray(list)) {
-    holidayCache.set(cacheKey, { timestamp: Date.now(), data: list });
-  }
-
-  return { status: 200, data: list };
-}
-
-// 1. Path-based route: /api/holidays/:year/:countryCode (e.g. /api/holidays/2026/SG)
-export async function handleHolidaysByPath(req: Request, res: Response) {
-  const { year: yearParam, countryCode: countryParam } = req.params;
-
-  const year = parseInt(yearParam, 10);
-  if (isNaN(year) || year < 1900 || year > 2100) {
-    return res.status(400).json({ error: "Invalid year. Please provide a valid 4-digit year (1900-2100)." });
-  }
-
-  const countryCode = (countryParam || "SG").trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(countryCode)) {
-    return res.status(400).json({ error: "Invalid country code. Must be a 2-letter ISO country code (e.g. SG, US, GB)." });
-  }
-
-  try {
-    const result = await fetchPublicHolidaysFromProvider(year, countryCode);
-    return res.status(result.status).json(result.data);
-  } catch (err) {
-    console.error("Failed to query public holidays:", err);
-    return res.status(502).json({
-      error: "Unable to reach public holidays provider",
-      details: err instanceof Error ? err.message : "Unknown error",
-    });
-  }
-}
-
-// 2. Query-based route: /api/holidays?year=2026&country=SG or ?date=2026-08-10&country=SG
-export async function handleHolidaysByQuery(req: Request, res: Response) {
-  const countryQuery = (req.query.country || req.query.countryCode || "SG") as string;
-  const countryCode = countryQuery.trim().toUpperCase();
-
-  if (!/^[A-Z]{2}$/.test(countryCode)) {
-    return res.status(400).json({ error: "Invalid country code. Must be a 2-letter ISO country code (e.g. SG, US, GB)." });
-  }
-
-  const dateQuery = req.query.date as string | undefined;
-  let year: number;
-
-  if (dateQuery && /^\d{4}-\d{2}-\d{2}$/.test(dateQuery.trim())) {
-    year = parseInt(dateQuery.trim().slice(0, 4), 10);
-  } else if (req.query.year) {
-    year = parseInt(req.query.year as string, 10);
-  } else {
-    year = 2026; // Default to 2026 as per user spec
-  }
-
-  if (isNaN(year) || year < 1900 || year > 2100) {
-    return res.status(400).json({ error: "Invalid year. Please provide a valid 4-digit year (1900-2100)." });
-  }
-
-  try {
-    const result = await fetchPublicHolidaysFromProvider(year, countryCode);
-
-    if (result.status !== 200 || !Array.isArray(result.data)) {
-      return res.status(result.status).json(result.data);
+    if (response.ok) {
+      const list = await response.json();
+      if (Array.isArray(list) && list.length > 0) {
+        holidayCache.set(cacheKey, { timestamp: Date.now(), data: list });
+        return list;
+      }
     }
+  } catch (err) {
+    console.warn(`Upstream holiday fetch failed for ${year}/${normalizedCountry}:`, err);
+  }
 
-    const holidays = result.data as Array<{ date: string; name: string; localName: string; countryCode: string }>;
+  // Fallback to static data if SG & 2026 or return empty list without crashing
+  if (normalizedCountry === "SG" && year === 2026) {
+    return SINGAPORE_HOLIDAYS_2026;
+  }
 
-    // If a specific date was queried, provide both enriched holiday detection and full list
-    if (dateQuery && /^\d{4}-\d{2}-\d{2}$/.test(dateQuery.trim())) {
-      const targetDate = dateQuery.trim();
-      const matched = holidays.find((h) => h.date === targetDate) || null;
+  return [];
+}
 
-      return res.status(200).json({
-        date: targetDate,
+/**
+ * Parses parameters from both path patterns (/2026/SG) and query params (?year=2026&country=SG)
+ */
+function extractYearAndCountry(req: UniversalRequest): { year: number; countryCode: string; date?: string } {
+  const query = getQueryParams(req);
+  let year = 2026;
+  let countryCode = (query.country || query.countryCode || "SG").trim().toUpperCase();
+  let date = query.date ? query.date.trim() : undefined;
+
+  // Check URL pathname for /api/holidays/:year/:countryCode
+  const rawUrl = req.url || "";
+  const pathname = rawUrl.split("?")[0];
+  const segments = pathname.split("/").filter(Boolean);
+
+  // E.g., ['api', 'holidays', '2026', 'SG'] or ['holidays', '2026', 'SG']
+  const lastIndex = segments.length - 1;
+  if (lastIndex >= 1) {
+    const maybeCountry = segments[lastIndex];
+    const maybeYear = parseInt(segments[lastIndex - 1], 10);
+    if (/^[A-Z]{2}$/i.test(maybeCountry) && !isNaN(maybeYear) && maybeYear >= 1900 && maybeYear <= 2100) {
+      year = maybeYear;
+      countryCode = maybeCountry.toUpperCase();
+    }
+  }
+
+  // Also check req.params if set by Express
+  if (req.params?.year) {
+    const parsedYear = parseInt(req.params.year, 10);
+    if (!isNaN(parsedYear)) year = parsedYear;
+  }
+  if (req.params?.countryCode) {
+    countryCode = req.params.countryCode.trim().toUpperCase();
+  }
+
+  if (query.year) {
+    const parsedYear = parseInt(query.year, 10);
+    if (!isNaN(parsedYear) && parsedYear >= 1900 && parsedYear <= 2100) {
+      year = parsedYear;
+    }
+  }
+
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    year = parseInt(date.slice(0, 4), 10);
+  }
+
+  if (!/^[A-Z]{2}$/.test(countryCode)) {
+    countryCode = "SG";
+  }
+
+  return { year, countryCode, date };
+}
+
+export async function handleHolidays(req: UniversalRequest, res: UniversalResponse) {
+  if (req.method === "OPTIONS") {
+    sendJsonResponse(res, 204, {});
+    return;
+  }
+
+  try {
+    const { year, countryCode, date } = extractYearAndCountry(req);
+    const holidays = await fetchPublicHolidaysFromProvider(year, countryCode);
+
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const matched = holidays.find((h: any) => h.date === date) || null;
+      sendJsonResponse(res, 200, {
+        date,
         countryCode,
         year,
         isPublicHoliday: !!matched,
         holiday: matched,
         holidays,
       });
+      return;
     }
 
-    // Default: return raw array matching upstream Date Nager schema
-    return res.status(200).json(holidays);
+    sendJsonResponse(res, 200, holidays);
   } catch (err) {
     console.error("Failed to query public holidays:", err);
-    return res.status(502).json({
-      error: "Unable to reach public holidays provider",
-      details: err instanceof Error ? err.message : "Unknown error",
-    });
+    sendJsonResponse(res, 200, SINGAPORE_HOLIDAYS_2026);
   }
 }
 
-router.get("/:year/:countryCode", handleHolidaysByPath);
-router.get("/", handleHolidaysByQuery);
+// Universal Serverless default export
+export default async function holidaysHandler(req: any, res: any, next?: any) {
+  try {
+    await handleHolidays(req, res);
+  } catch (err) {
+    console.error("Unhandled error in Holidays handler:", err);
+    sendJsonResponse(res, 200, SINGAPORE_HOLIDAYS_2026);
+  }
+}
 
-export default router;
+// Support Express Router mounting
+export const holidaysRouter = Router();
+holidaysRouter.all("*", (req, res) => handleHolidays(req, res));

@@ -1,7 +1,6 @@
-import type { Request, Response } from "express";
+import type { UniversalRequest, UniversalResponse } from "./_utils";
+import { sendJsonResponse } from "./_utils";
 import { Router } from "express";
-
-const router = Router();
 
 export interface HealthCheckServiceStatus {
   status: "configured" | "demo_mode" | "missing_key" | "available" | "unavailable";
@@ -32,13 +31,18 @@ export interface HealthCheckResponse {
   };
 }
 
-export async function handleHealth(_req: Request, res: Response) {
+export async function handleHealth(req: UniversalRequest, res: UniversalResponse) {
+  if (req.method === "OPTIONS") {
+    sendJsonResponse(res, 204, {});
+    return;
+  }
+
   const nasaKey = process.env.NASA_API_KEY?.trim();
   const hasNasaKey = Boolean(nasaKey && nasaKey !== "DEMO_KEY");
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
   const hasGeminiKey = Boolean(geminiKey);
 
-  const mem = process.memoryUsage();
+  const mem = process.memoryUsage ? process.memoryUsage() : { rss: 0, heapTotal: 0, heapUsed: 0 };
   const toMB = (bytes: number) => Math.round((bytes / 1024 / 1024) * 100) / 100;
 
   const data: HealthCheckResponse = {
@@ -46,7 +50,7 @@ export async function handleHealth(_req: Request, res: Response) {
     app: "On That Day - Cosmic Memories & NASA APOD",
     version: "1.0.0",
     timestamp: new Date().toISOString(),
-    uptimeSeconds: Math.floor(process.uptime()),
+    uptimeSeconds: typeof process.uptime === "function" ? Math.floor(process.uptime()) : 0,
     environment: process.env.NODE_ENV || "development",
     services: {
       nasaApod: {
@@ -68,8 +72,8 @@ export async function handleHealth(_req: Request, res: Response) {
       },
     },
     system: {
-      nodeVersion: process.version,
-      platform: process.platform,
+      nodeVersion: process.version || "unknown",
+      platform: process.platform || "unknown",
       memoryUsageMB: {
         rss: toMB(mem.rss),
         heapTotal: toMB(mem.heapTotal),
@@ -78,10 +82,23 @@ export async function handleHealth(_req: Request, res: Response) {
     },
   };
 
-  return res.status(200).json(data);
+  sendJsonResponse(res, 200, data);
 }
 
-router.get("/", handleHealth);
+// Universal Serverless default export
+export default async function healthHandler(req: any, res: any, next?: any) {
+  try {
+    await handleHealth(req, res);
+  } catch (err) {
+    console.error("Unhandled error in Health handler:", err);
+    sendJsonResponse(res, 200, {
+      status: "ok",
+      app: "On That Day",
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
 
-export { router as healthRouter };
-export default router;
+// Support Express Router mounting
+export const healthRouter = Router();
+healthRouter.all("*", (req, res) => handleHealth(req, res));

@@ -1,23 +1,18 @@
+import type { UniversalRequest, UniversalResponse } from "./_utils";
+import { getQueryParams, getRequestBody, sendJsonResponse } from "./_utils";
 import { Router } from "express";
 import { GoogleGenAI } from "@google/genai";
-
-const singlishRouter = Router();
 
 let aiClient: GoogleGenAI | null = null;
 
 function getAiClient(): GoogleGenAI | null {
-  const key = process.env.GEMINI_API_KEY;
+  const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) {
     return null;
   }
   if (!aiClient) {
     aiClient = new GoogleGenAI({
       apiKey: key,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
     });
   }
   return aiClient;
@@ -46,11 +41,11 @@ const RELATABLE_SINGAPORE_QUOTES = [
  * Fallback Singlish transformer and astronomical commentary generator.
  * Clean, non-repetitive, zero vulgarities.
  */
-function generateFallbackSinglish(title: string, date: string, explanation: string): SinglishResponseData {
-  const cleanExp = explanation.replace(/^Explanation:\s*/i, "").trim();
+export function generateFallbackSinglish(title: string, date: string, explanation: string): SinglishResponseData {
+  const cleanExp = (explanation || "").replace(/^Explanation:\s*/i, "").trim();
 
   // Non-repetitive sentence-level Singlish conversion
-  const sentences = cleanExp.split(/(?<=[.?!])\s+/);
+  const sentences = cleanExp ? cleanExp.split(/(?<=[.?!])\s+/) : ["Cosmic spectacle captured across the celestial expanse."];
   const translated = sentences.map((sentence, idx) => {
     let s = sentence
       .replace(/\bIn this image\b/gi, "Looking at this picture")
@@ -72,7 +67,7 @@ function generateFallbackSinglish(title: string, date: string, explanation: stri
       .replace(/\bTherefore,\b/gi, "So basically,")
       .replace(/\bAs a result,\b/gi, "Because of that,");
 
-    // Add mild natural sentence particles periodically, not on every sentence
+    // Add mild natural sentence particles periodically
     if (idx === 0 && !s.endsWith("lah.") && !s.endsWith("leh.")) {
       s = s.replace(/\.$/, " lah.");
     } else if (idx === 2 && !s.endsWith("lor.")) {
@@ -85,11 +80,12 @@ function generateFallbackSinglish(title: string, date: string, explanation: stri
 
   // Deterministic quote selection based on date string hash
   let hash = 0;
-  for (let i = 0; i < date.length; i++) {
-    hash = (hash * 31 + date.charCodeAt(i)) % RELATABLE_SINGAPORE_QUOTES.length;
+  const dStr = date || "2026-01-01";
+  for (let i = 0; i < dStr.length; i++) {
+    hash = (hash * 31 + dStr.charCodeAt(i)) % RELATABLE_SINGAPORE_QUOTES.length;
   }
   const quote = RELATABLE_SINGAPORE_QUOTES[Math.abs(hash)];
-  const summary = `NASA captured "${title}" on ${date}, showing us the deep beauty of celestial physics at work.`;
+  const summary = `NASA captured "${title || "Cosmic Sky"}" on ${date || "this day"}, showing us the deep beauty of celestial physics at work.`;
 
   const singlishCombined = `${translationText}\n\n🇸🇬 **Relatable Singapore Saying:**\n"${quote}"\n\n**Quick Takeaway:** ${summary}`;
 
@@ -102,12 +98,25 @@ function generateFallbackSinglish(title: string, date: string, explanation: stri
   };
 }
 
-singlishRouter.post("/", async (req, res) => {
-  try {
-    const { title = "Cosmic Sky", date = "", explanation = "" } = req.body || {};
+export async function handleSinglish(req: UniversalRequest, res: UniversalResponse) {
+  // CORS Preflight
+  if (req.method === "OPTIONS") {
+    sendJsonResponse(res, 204, {});
+    return;
+  }
 
-    if (!explanation || typeof explanation !== "string") {
-      res.status(400).json({ error: "Missing explanation text in request body" });
+  try {
+    const body = (await getRequestBody<{ title?: string; date?: string; explanation?: string }>(req)) || {};
+    const query = getQueryParams(req);
+
+    const title = body.title || query.title || "Cosmic Sky";
+    const date = body.date || query.date || "";
+    const explanation = body.explanation || query.explanation || "";
+
+    if (!explanation || typeof explanation !== "string" || !explanation.trim()) {
+      // If explanation is missing, generate fallback for the given title/date instead of 400 crash
+      const fallbackData = generateFallbackSinglish(title, date, "A breathtaking view of celestial bodies and cosmic dust in our universe.");
+      sendJsonResponse(res, 200, fallbackData);
       return;
     }
 
@@ -117,8 +126,13 @@ singlishRouter.post("/", async (req, res) => {
       try {
         const prompt = `Title: ${title}\nDate: ${date}\nNASA Explanation: ${explanation}\n\nPlease translate this NASA explanation into authentic, respectful Singapore Singlish and provide a relatable Singaporean saying/quote summary.`;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-3.1-flash-lite",
+        // Add timeout for Gemini call to protect serverless latency
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Gemini API timeout")), 6500)
+        );
+
+        const apiPromise = ai.models.generateContent({
+          model: "gemini-2.5-flash",
           contents: prompt,
           config: {
             systemInstruction: `You are an expert science communicator translating NASA Astronomy Picture of the Day (APOD) explanations into authentic, respectful Singapore Singlish (Colloquial Singapore English).
@@ -153,14 +167,16 @@ STRICT REQUIREMENTS:
           },
         });
 
+        const response = await Promise.race([apiPromise, timeoutPromise]);
         const rawText = response.text;
+
         if (rawText && rawText.trim().length > 0) {
           try {
             const parsed = JSON.parse(rawText);
             if (parsed && parsed.translation && parsed.quote) {
               const combined = `${parsed.translation.trim()}\n\n🇸🇬 **Relatable Singapore Saying:**\n"${parsed.quote.trim()}"\n\n**Quick Takeaway:** ${parsed.summary?.trim() || ""}`;
 
-              res.json({
+              sendJsonResponse(res, 200, {
                 translation: parsed.translation.trim(),
                 summary: parsed.summary?.trim() || "",
                 quote: parsed.quote.trim(),
@@ -170,7 +186,7 @@ STRICT REQUIREMENTS:
               return;
             }
           } catch (jsonErr) {
-            console.warn("Failed to parse Gemini JSON output:", jsonErr, rawText);
+            console.warn("Failed to parse Gemini JSON output, falling back:", jsonErr);
           }
         }
       } catch (geminiError) {
@@ -178,13 +194,29 @@ STRICT REQUIREMENTS:
       }
     }
 
-    // Fallback generator
+    // High quality deterministic fallback generator
     const fallbackData = generateFallbackSinglish(title, date, explanation);
-    res.json(fallbackData);
+    sendJsonResponse(res, 200, fallbackData);
   } catch (error) {
     console.error("Error processing Singlish translation:", error);
-    res.status(500).json({ error: "Failed to generate Singlish explanation" });
+    const fallbackData = generateFallbackSinglish("Cosmic Vista", "", "A celestial sight from NASA archive.");
+    sendJsonResponse(res, 200, fallbackData);
   }
-});
+}
 
-export default singlishRouter;
+// Universal Serverless default export
+export default async function singlishHandler(req: any, res: any, next?: any) {
+  try {
+    await handleSinglish(req, res);
+  } catch (err) {
+    console.error("Unhandled error in Singlish handler:", err);
+    sendJsonResponse(res, 500, {
+      error: "Internal Server Error in Singlish endpoint",
+      details: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+// Support Express Router mounting
+export const singlishRouter = Router();
+singlishRouter.all("*", (req, res) => handleSinglish(req, res));

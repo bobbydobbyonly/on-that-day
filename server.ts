@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import apiRouter from "./api/index";
+import { apiRouter } from "./api/index";
 
 async function startServer() {
   const app = express();
