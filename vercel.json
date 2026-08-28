@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/api/holidays/:year/:countryCode",
+      "destination": "/api/holidays?year=:year&countryCode=:countryCode"
+    },
+    {
+      "source": "/api/public-holidays/:year/:countryCode",
+      "destination": "/api/holidays?year=:year&countryCode=:countryCode"
+    }
+  ]
+}

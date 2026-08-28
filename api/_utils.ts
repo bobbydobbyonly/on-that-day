@@ -9,7 +9,7 @@ export interface UniversalRequest extends IncomingMessage {
   path?: string;
 }
 
-export interface UniversalResponse extends ServerResponse {
+export interface UniversalResponse extends Partial<ServerResponse> {
   status?: (code: number) => UniversalResponse;
   json?: (data: any) => UniversalResponse | void;
   send?: (data: any) => UniversalResponse | void;
@@ -93,24 +93,54 @@ export async function getRequestBody<T = any>(req: UniversalRequest): Promise<T 
  * Universally send a JSON response whether in Express, Vercel, or native Node.js HTTP.
  */
 export function sendJsonResponse(res: UniversalResponse, statusCode: number, data: any): void {
-  // Add CORS headers for serverless cross-origin safety
-  if (typeof res.setHeader === "function") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
+  if (!res) return;
+
+  // Prevent sending if already concluded
+  if (res.headersSent || res.writableEnded) {
+    return;
   }
 
-  // If Express-like res.status().json() is available
+  // Add CORS headers for serverless cross-origin safety
+  if (typeof res.setHeader === "function") {
+    try {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+    } catch {
+      // Headers may have been pre-committed
+    }
+  }
+
+  // If Express or Vercel res.status(code).json(data)
   if (typeof res.status === "function" && typeof res.json === "function") {
-    res.status(statusCode).json(data);
-    return;
+    try {
+      res.status(statusCode).json(data);
+      return;
+    } catch {
+      // Fallback
+    }
+  }
+
+  // If res.json is available
+  if (typeof res.json === "function") {
+    try {
+      if (typeof res.status === "function") {
+        res.status(statusCode);
+      } else {
+        res.statusCode = statusCode;
+      }
+      res.json(data);
+      return;
+    } catch {
+      // Fallback
+    }
   }
 
   // Raw Node HTTP ServerResponse fallback
   try {
     res.statusCode = statusCode;
-    res.end(JSON.stringify(data));
+    res.end(typeof data === "string" ? data : JSON.stringify(data));
   } catch (err) {
     console.error("Failed to write serverless response:", err);
   }
