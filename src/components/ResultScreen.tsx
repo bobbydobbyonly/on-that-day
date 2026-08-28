@@ -688,14 +688,14 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="text-xs sm:text-sm font-bold text-[#faabff] tracking-wide">
-                            Singapore (Singlish) Translation
+                            Singapore (Singlish) Story & Humor
                           </h4>
                           <span className="text-[10px] font-semibold bg-[#ffd79b]/15 text-[#ffd79b] border border-[#ffd79b]/30 px-2 py-0.5 rounded-full font-mono">
-                            Direct NASA Translation
+                            Cosmic Story & Wit
                           </span>
                         </div>
                         <p className="text-[11px] text-[#d6c4ac]/80 mt-0.5">
-                          Faithful translation of NASA's scientific description into natural, polite Singapore English — clean, non-repetitive & family-friendly
+                          Translates dense NASA science into a crystal-clear story with relatable Singaporean humor, local analogies & cosmic wisdom
                         </p>
                       </div>
                     </div>
