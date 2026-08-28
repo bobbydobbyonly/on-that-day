@@ -38,6 +38,34 @@ export function formatFriendlyDate(dateStr: string): string {
   }
 }
 
+export function formatShortDate(dateStr: string): string {
+  try {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+export function formatDayOfWeek(dateStr: string): string {
+  try {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      timeZone: 'UTC',
+    });
+  } catch {
+    return '';
+  }
+}
+
 export function getDaysAgoText(dateStr: string): string {
   try {
     const target = new Date(dateStr + 'T00:00:00Z').getTime();

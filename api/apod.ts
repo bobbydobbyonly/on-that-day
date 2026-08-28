@@ -4,17 +4,13 @@ import { Router } from "express";
 const router = Router();
 
 export async function handleApod(req: Request, res: Response) {
-  const apiKey = process.env.NASA_API_KEY;
-
-  if (!apiKey || !apiKey.trim()) {
-    return res.status(500).json({ error: "credential not configured" });
-  }
+  const apiKey = (process.env.NASA_API_KEY && process.env.NASA_API_KEY.trim()) ? process.env.NASA_API_KEY.trim() : "DEMO_KEY";
 
   const { date, hd, thumbs } = req.query;
 
   try {
     const targetUrl = new URL("https://api.nasa.gov/planetary/apod");
-    targetUrl.searchParams.set("api_key", apiKey.trim());
+    targetUrl.searchParams.set("api_key", apiKey);
 
     if (typeof date === "string" && date.trim()) {
       targetUrl.searchParams.set("date", date.trim());
