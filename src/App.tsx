@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ApodItem, UserSession, FavoriteDate, PublicHoliday } from './types';
+import { SinglishResult } from './services/singlishService';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import { CosmicHeader } from './components/CosmicHeader';
 import { ResultScreen } from './components/ResultScreen';
@@ -47,6 +48,7 @@ export default function App() {
   const [showKeepsake, setShowKeepsake] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
   const [activeHoliday, setActiveHoliday] = useState<PublicHoliday | null>(null);
+  const [activeSinglish, setActiveSinglish] = useState<SinglishResult | null>(null);
 
   // Load APOD whenever session date changes (when not in initial setup)
   useEffect(() => {
@@ -189,6 +191,7 @@ export default function App() {
           onSelectDate={handleDateChange}
           isLoading={isLoading}
           onHolidayLoaded={setActiveHoliday}
+          onSinglishLoaded={setActiveSinglish}
         />
       </main>
 
@@ -210,6 +213,8 @@ export default function App() {
           item={apodItem}
           userName={session.name || 'Stargazer'}
           holiday={activeHoliday}
+          singaporeQuote={activeSinglish?.quote}
+          singlishSummary={activeSinglish?.summary}
           onClose={() => setShowKeepsake(false)}
         />
       )}

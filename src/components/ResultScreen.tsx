@@ -60,6 +60,7 @@ interface ResultScreenProps {
   onSelectDate: (date: string) => void;
   isLoading: boolean;
   onHolidayLoaded?: (holiday: PublicHoliday | null) => void;
+  onSinglishLoaded?: (singlish: SinglishResult) => void;
 }
 
 type TabType = 'story' | 'keepsake' | 'context' | 'milestones';
@@ -74,6 +75,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   onSelectDate,
   isLoading,
   onHolidayLoaded,
+  onSinglishLoaded,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('story');
   const [isPlayingNarration, setIsPlayingNarration] = useState(false);
@@ -176,6 +178,9 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
         if (isMounted) {
           setSinglishData(res);
           setIsLoadingSinglish(false);
+          if (onSinglishLoaded) {
+            onSinglishLoaded(res);
+          }
         }
       })
       .catch(() => {
@@ -187,7 +192,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [item.date, item.title, item.explanation]);
+  }, [item.date, item.title, item.explanation, onSinglishLoaded]);
 
   const handleToggleNarration = () => {
     if (isPlayingNarration) {
@@ -214,16 +219,17 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
       stopSpeaking();
       setIsPlayingSinglishNarration(false);
     } else {
-      if (!singlishData?.singlish) return;
+      if (!singlishData) return;
       stopSpeaking();
       setIsPlayingNarration(false);
-      const cleanSinglish = singlishData.singlish.replace(/\*\*/g, '').replace(/🇸🇬/g, '');
+      const speechBody = `${singlishData.translation}. Singapore cosmic saying: ${singlishData.quote}`;
+      const cleanSinglish = speechBody.replace(/\*\*/g, '').replace(/🇸🇬/g, '');
       const started = speakText(
         cleanSinglish,
         () => setIsPlayingSinglishNarration(true),
         () => setIsPlayingSinglishNarration(false),
         () => setIsPlayingSinglishNarration(false),
-        { rate: 1.02 }
+        { rate: 1.0 }
       );
       if (started) {
         setIsPlayingSinglishNarration(true);
@@ -232,9 +238,10 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   };
 
   const handleCopySinglish = () => {
-    if (!singlishData?.singlish) return;
+    if (!singlishData) return;
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(singlishData.singlish);
+      const copyPayload = `✦ SINGAPORE (SINGLISH) ASTRONOMICAL TRANSLATION ✦\nCelestial Record: ${item.title} (${formatFriendlyDate(item.date)})\n\n${singlishData.translation}\n\n🇸🇬 Singapore Cosmic Saying & Wisdom:\n"${singlishData.quote}"\n\nTakeaway: ${singlishData.summary}\n\nArchive: NASA Astronomy Picture of the Day`;
+      navigator.clipboard.writeText(copyPayload);
       setCopiedSinglish(true);
       setTimeout(() => setCopiedSinglish(false), 2200);
     }
@@ -242,6 +249,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
 
   const handleRegenerateSinglish = async () => {
     try {
+      localStorage.removeItem(`singlish_apod_v2_${item.date}`);
       localStorage.removeItem(`singlish_apod_${item.date}`);
     } catch {
       // ignore
@@ -250,6 +258,9 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
     const fresh = await fetchSinglishExplanation(item.title, item.date, item.explanation);
     setSinglishData(fresh);
     setIsLoadingSinglish(false);
+    if (onSinglishLoaded) {
+      onSinglishLoaded(fresh);
+    }
   };
 
   const handleShareLink = () => {
@@ -647,14 +658,14 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <h4 className="text-xs sm:text-sm font-bold text-[#faabff] tracking-wide">
-                            Singapore (Singlish) Cosmic Breakdown
+                            Singapore (Singlish) Translation
                           </h4>
                           <span className="text-[10px] font-semibold bg-[#ffd79b]/15 text-[#ffd79b] border border-[#ffd79b]/30 px-2 py-0.5 rounded-full font-mono">
-                            Kopitiam Edition
+                            Direct NASA Translation
                           </span>
                         </div>
                         <p className="text-[11px] text-[#d6c4ac]/80 mt-0.5">
-                          NASA explanation translated into authentic Singapore Singlish so everyone can understand steady-steady
+                          Faithful translation of NASA's scientific description into natural, polite Singapore English — clean, non-repetitive & family-friendly
                         </p>
                       </div>
                     </div>
@@ -666,13 +677,13 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                         type="button"
                         id="btn-listen-singlish"
                         onClick={handleToggleSinglishNarration}
-                        disabled={isLoadingSinglish || !singlishData?.singlish}
+                        disabled={isLoadingSinglish || !singlishData}
                         className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                           isPlayingSinglishNarration
                             ? 'bg-[#faabff] text-[#4a0058] shadow-[0_0_12px_rgba(250,171,255,0.5)] animate-pulse'
                             : 'bg-[#bd06da]/30 hover:bg-[#bd06da]/50 text-[#faabff] border border-[#faabff]/40'
                         } disabled:opacity-50`}
-                        title="Listen to Singlish narration"
+                        title="Listen to Singlish translation"
                       >
                         {isPlayingSinglishNarration ? (
                           <>
@@ -692,9 +703,9 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                         type="button"
                         id="btn-copy-singlish"
                         onClick={handleCopySinglish}
-                        disabled={isLoadingSinglish || !singlishData?.singlish}
+                        disabled={isLoadingSinglish || !singlishData}
                         className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[#d6c4ac] hover:text-white border border-white/10 transition-colors cursor-pointer disabled:opacity-50"
-                        title="Copy Singlish explanation"
+                        title="Copy Singlish translation & quote"
                       >
                         {copiedSinglish ? (
                           <Check className="w-3.5 h-3.5 text-green-400" />
@@ -724,70 +735,76 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                         <Sparkles className="w-4 h-4" />
                       </div>
                       <p className="text-xs font-medium text-[#faabff]">
-                        Brewing kopi-c and converting NASA cosmos to Singlish...
+                        Translating NASA explanation into clean Singapore English...
                       </p>
                       <p className="text-[11px] text-[#d6c4ac]/60">
-                        Gathering local celestial slang (lah, leh, lor, swee sia, steady)
+                        Synthesizing accurate astronomical ideas and relatable Singapore quotes
                       </p>
                     </div>
-                  ) : singlishData?.singlish ? (
+                  ) : singlishData ? (
                     <div className="space-y-3 relative z-10">
-                      {singlishData.singlish.split('\n\n').map((para, pIdx) => {
-                        const isTakeaway =
-                          para.includes('Kopitiam Takeaway:') ||
-                          para.includes('Takeaway:');
-
-                        if (isTakeaway) {
-                          return (
-                            <div
+                      {/* Translation text */}
+                      <div className="space-y-2.5">
+                        {(singlishData.translation || singlishData.singlish)
+                          .split('\n\n')
+                          .filter((p) => !p.includes('Relatable Singapore Saying:') && !p.includes('Quick Takeaway:') && !p.includes('Kopitiam Takeaway:'))
+                          .map((para, pIdx) => (
+                            <p
                               key={pIdx}
-                              className="mt-3 p-3.5 rounded-xl bg-[#ffd79b]/10 border border-[#ffd79b]/40 text-[#ffd79b] text-xs sm:text-sm font-medium leading-relaxed flex items-start gap-2.5 shadow-sm"
+                              className="text-xs sm:text-sm text-[#e4dffc]/95 leading-relaxed font-normal"
                             >
-                              <span className="text-lg shrink-0">☕</span>
-                              <div>
-                                <span className="font-bold block text-white mb-0.5">
-                                  🇸🇬 Kopitiam Astronomer Takeaway:
-                                </span>
-                                <span className="text-[#e4dffc]">
-                                  {para
-                                    .replace(/^.*Kopitiam Takeaway:\s*/i, '')
-                                    .replace(/^\*\*/g, '')
-                                    .replace(/\*\*$/g, '')}
-                                </span>
-                              </div>
+                              {para}
+                            </p>
+                          ))}
+                      </div>
+
+                      {/* Relatable Singapore Quote / Saying Highlight Box */}
+                      {singlishData.quote && (
+                        <div className="mt-3 p-3.5 sm:p-4 rounded-xl bg-gradient-to-r from-[#bd06da]/20 via-[#ffd79b]/15 to-[#161224] border border-[#faabff]/40 shadow-sm space-y-2">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-[#faabff] uppercase tracking-wider">
+                              <span>🇸🇬</span>
+                              <span>Relatable Singaporean Quote & Wisdom</span>
                             </div>
-                          );
-                        }
+                            <button
+                              type="button"
+                              onClick={onOpenKeepsake}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#ffd79b] hover:text-white bg-[#ffd79b]/15 hover:bg-[#ffd79b]/25 border border-[#ffd79b]/30 px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                            >
+                              <Award className="w-3.5 h-3.5" />
+                              <span>View on Keepsake Certificate</span>
+                            </button>
+                          </div>
 
-                        return (
-                          <p
-                            key={pIdx}
-                            className="text-xs sm:text-sm text-[#e4dffc]/95 leading-relaxed font-normal"
-                          >
-                            {para}
+                          <p className="font-serif italic text-xs sm:text-sm text-[#ffd79b] leading-relaxed">
+                            "{singlishData.quote}"
                           </p>
-                        );
-                      })}
 
-                      {/* Singlish Tag Chips */}
+                          {singlishData.summary && (
+                            <div className="pt-2 border-t border-white/10 text-xs text-[#e4dffc]/90 flex items-start gap-1.5">
+                              <span className="text-[#85edff] font-semibold shrink-0">✦ Quick Takeaway:</span>
+                              <span className="text-[#d6c4ac]">{singlishData.summary}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Quality & Origin Chips */}
                       <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[10px] text-[#d6c4ac]/70">
                         <div className="flex flex-wrap gap-1.5">
                           <span className="px-2 py-0.5 rounded-full bg-[#bd06da]/20 text-[#faabff] border border-[#faabff]/30 font-mono">
-                            ✦ Wah Lau Eh
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full bg-[#ffd79b]/15 text-[#ffd79b] border border-[#ffd79b]/30 font-mono">
-                            ✦ Swee Lah
+                            ✦ Direct Translation
                           </span>
                           <span className="px-2 py-0.5 rounded-full bg-[#00d5ed]/15 text-[#85edff] border border-[#00d5ed]/30 font-mono">
-                            ✦ Solid Sia
+                            ✦ Family-Friendly
                           </span>
-                          <span className="px-2 py-0.5 rounded-full bg-white/5 text-[#d6c4ac] border border-white/10 font-mono">
-                            ✦ Don&apos;t Play Play
+                          <span className="px-2 py-0.5 rounded-full bg-[#ffd79b]/15 text-[#ffd79b] border border-[#ffd79b]/30 font-mono">
+                            ✦ 🇸🇬 Keepsake Inscription Ready
                           </span>
                         </div>
 
                         <span className="font-mono text-[#faabff]/80">
-                          {singlishData.source === 'gemini' ? '✦ Powered by Gemini AI' : '✦ Kopitiam Engine'}
+                          {singlishData.source === 'gemini' ? '✦ Powered by Gemini AI' : '✦ Verified Engine'}
                         </span>
                       </div>
                     </div>
@@ -831,7 +848,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
               </div>
 
               {/* Card mini-preview */}
-              <div className="bg-gradient-to-br from-[#1b192e] to-[#0e0c20] border border-[#ffd79b]/40 rounded-xl p-4 sm:p-5 relative overflow-hidden shadow-lg">
+              <div className="bg-gradient-to-br from-[#1b192e] to-[#0e0c20] border border-[#ffd79b]/40 rounded-xl p-4 sm:p-5 relative overflow-hidden shadow-lg space-y-3">
                 <div className="relative z-10 space-y-3">
                   <div className="flex justify-between items-start">
                     <div>
@@ -848,6 +865,23 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                   <p className="text-xs italic text-[#e4dffc]/80 border-l-2 border-[#ffd79b] pl-3 py-1">
                     "On the day marked for {userName}, the universe revealed this wonder across the starry void."
                   </p>
+
+                  {/* Singapore Cosmic Quote in mini preview */}
+                  {singlishData?.quote && (
+                    <div className="bg-gradient-to-r from-[#bd06da]/15 via-[#ffd79b]/15 to-[#131125] border border-[#faabff]/35 rounded-lg p-2.5 text-center">
+                      <span className="text-[9px] uppercase font-bold tracking-wider text-[#faabff] block mb-0.5">
+                        🇸🇬 Singapore Cosmic Saying & Wisdom
+                      </span>
+                      <p className="font-serif italic text-xs text-[#ffd79b]">
+                        "{singlishData.quote}"
+                      </p>
+                      {singlishData.summary && (
+                        <p className="text-[10px] text-[#d6c4ac]/80 mt-1 font-sans">
+                          ✦ {singlishData.summary}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-2 text-[11px] text-[#d6c4ac]/80 pt-2 border-t border-white/10">
                     <div>

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { ApodItem, MoonPhaseInfo, PublicHoliday } from '../types';
+import React, { useState, useEffect } from 'react';
+import { ApodItem, PublicHoliday } from '../types';
 import { formatFriendlyDate, getZodiacSign, calculateMoonPhase } from '../utils/astronomyUtils';
-import { Sparkles, Award, Share2, Copy, Check, Printer, X, Heart, Calendar } from 'lucide-react';
+import { Sparkles, Copy, Check, Printer, X } from 'lucide-react';
 
 interface KeepsakeCardProps {
   item: ApodItem;
@@ -9,6 +9,8 @@ interface KeepsakeCardProps {
   onClose: () => void;
   holiday?: PublicHoliday | null;
   countryName?: string;
+  singaporeQuote?: string;
+  singlishSummary?: string;
 }
 
 export const KeepsakeCard: React.FC<KeepsakeCardProps> = ({
@@ -17,11 +19,25 @@ export const KeepsakeCard: React.FC<KeepsakeCardProps> = ({
   onClose,
   holiday,
   countryName = 'Singapore',
+  singaporeQuote,
+  singlishSummary,
 }) => {
   const [copied, setCopied] = useState(false);
   const [dedication, setDedication] = useState(
     'May your journey through life shine as brightly as the ancient starlight recorded on this day.'
   );
+  const [includeSingaporeQuote, setIncludeSingaporeQuote] = useState(true);
+  const [quoteText, setQuoteText] = useState(
+    singaporeQuote ||
+      'Steady pom pi pi — even when stars explode across the galaxy, the universe keeps its cool.'
+  );
+
+  useEffect(() => {
+    if (singaporeQuote) {
+      setQuoteText(singaporeQuote);
+    }
+  }, [singaporeQuote]);
+
   const moon = calculateMoonPhase(item.date);
   const zodiac = getZodiacSign(item.date);
 
@@ -29,7 +45,11 @@ export const KeepsakeCard: React.FC<KeepsakeCardProps> = ({
     const holidayLine = holiday
       ? `Terrestrial Holiday: ${holiday.name} (${holiday.countryCode})\n`
       : '';
-    const text = `✦ HEIRLOOM OF THE COSMOS ✦\nDedicated to: ${userName}\nCelestial Date: ${formatFriendlyDate(item.date)}\nCosmic Event: ${item.title}\n${holidayLine}Moon Phase: ${moon.phaseName} (${moon.illumination}% lit)\nConstellation: ${zodiac}\n"${dedication}"\nArchive: NASA Astronomy Picture of the Day\nDiscovered on "On That Day"`;
+    const quoteLine =
+      includeSingaporeQuote && quoteText
+        ? `Singapore Cosmic Wisdom: "${quoteText}"\n`
+        : '';
+    const text = `✦ HEIRLOOM OF THE COSMOS ✦\nDedicated to: ${userName}\nCelestial Date: ${formatFriendlyDate(item.date)}\nCosmic Event: ${item.title}\n${holidayLine}Moon Phase: ${moon.phaseName} (${moon.illumination}% lit)\nConstellation: ${zodiac}\n${quoteLine}"${dedication}"\nArchive: NASA Astronomy Picture of the Day\nDiscovered on "On That Day"`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
@@ -142,6 +162,24 @@ export const KeepsakeCard: React.FC<KeepsakeCardProps> = ({
               </div>
             </div>
 
+            {/* Relatable Singaporean Saying & Wisdom Section */}
+            {includeSingaporeQuote && quoteText && (
+              <div className="bg-gradient-to-r from-[#bd06da]/15 via-[#ffd79b]/15 to-[#131125] border border-[#faabff]/35 rounded-xl p-3 sm:p-4 text-center shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-center gap-1.5 mb-1 text-[10px] uppercase font-bold tracking-wider text-[#faabff]">
+                  <span>🇸🇬</span>
+                  <span>Singapore Cosmic Saying & Wisdom</span>
+                </div>
+                <p className="font-serif italic text-xs sm:text-sm text-[#ffd79b] leading-relaxed">
+                  "{quoteText}"
+                </p>
+                {singlishSummary && (
+                  <p className="text-[11px] text-[#d6c4ac]/85 mt-1 font-sans">
+                    ✦ {singlishSummary}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Dedication quote editable */}
             <div className="bg-[#131125]/70 border border-white/10 rounded-lg p-3 sm:p-4 text-center">
               <label className="text-[10px] uppercase font-semibold text-[#d6c4ac]/60 block mb-1">
@@ -164,8 +202,23 @@ export const KeepsakeCard: React.FC<KeepsakeCardProps> = ({
           </div>
         </div>
 
+        {/* Option toggles */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-2">
+          <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-[#d6c4ac]">
+            <input
+              type="checkbox"
+              checked={includeSingaporeQuote}
+              onChange={(e) => setIncludeSingaporeQuote(e.target.checked)}
+              className="rounded border-white/20 bg-white/5 text-[#bd06da] focus:ring-0 cursor-pointer"
+            />
+            <span className="text-[#faabff] font-medium flex items-center gap-1">
+              <span>🇸🇬 Include Singapore Cosmic Quote on Certificate</span>
+            </span>
+          </label>
+        </div>
+
         {/* Action Controls */}
-        <div className="flex flex-wrap items-center justify-end gap-3 mt-6">
+        <div className="flex flex-wrap items-center justify-end gap-3 mt-4">
           <button
             onClick={handleCopyText}
             id="copy-keepsake-btn"

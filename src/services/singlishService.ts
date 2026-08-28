@@ -2,48 +2,86 @@
  * Singlish Astronomical Translation Service
  * Fetches AI-powered Singlish translation of NASA APOD descriptions from /api/singlish,
  * with local caching and offline fallback.
+ * Strictly non-repetitive, zero vulgarities, with relatable Singaporean quotes/sayings.
  */
 
 export interface SinglishResult {
+  translation: string;
+  summary: string;
+  quote: string;
   singlish: string;
   source: 'gemini' | 'fallback' | 'cache';
 }
 
+const RELATABLE_SINGAPORE_QUOTES = [
+  "Steady pom pi pi — even when stars explode across the galaxy, the universe keeps its cool.",
+  "Good things must share — ancient starlight traveled thousands of years just for us to marvel at tonight.",
+  "Small red dot on Earth, but our curiosity reaches to the far edges of the cosmic sky.",
+  "Slowly slowly catch monkey — cosmic wonders take millions of years to form, so don't rush through life.",
+  "Life is like a steaming cup of kopi-o — deep, rich, and best appreciated under a quiet starry night.",
+  "No matter how crowded our MRT or busy our day, there is always infinite breathing room in the cosmos.",
+  "Just like waiting for your favorite hawker food, the universe's greatest sights take time to simmer.",
+  "Look up at the stars and relak one corner — our worries are tiny compared to the big wide universe."
+];
+
 /**
- * Client-side fallback Singlish generator when network is completely offline
+ * Client-side fallback Singlish generator when network is completely offline.
+ * Clean, respectful, non-repetitive translation.
  */
 export function generateClientFallbackSinglish(
   title: string,
   date: string,
   explanation: string
-): string {
+): SinglishResult {
   const cleanExp = explanation.replace(/^Explanation:\s*/i, '').trim();
 
-  const transformed = cleanExp
-    .replace(/\bIn this image\b/gi, 'Looking at this photo ah')
-    .replace(/\bThis image shows\b/gi, 'Wah lau look at this, confirm showing')
-    .replace(/\bAstronomers believe\b/gi, 'The science experts all say lah')
-    .replace(/\bAstronomers have found\b/gi, 'The astronomers finally spot already')
-    .replace(/\bScientists discovered\b/gi, 'Scientists go and find out')
-    .replace(/\bLight-years away\b/gi, 'super far away, pass through so many light-years')
-    .replace(/\bMillion years\b/gi, 'millions of years (longer than waiting for BTO flat)')
-    .replace(/\bBillions of years\b/gi, 'billions of years, sibei long ago')
-    .replace(/\bVery hot\b/gi, 'hot like midday sun in Singapore without air-con')
-    .replace(/\bVery bright\b/gi, 'bright like Orchard Road Christmas lights')
-    .replace(/\bVery large\b/gi, 'sibei huge, bigger than whole Marina Bay')
-    .replace(/\bVery massive\b/gi, 'solid heavy, don\'t play play')
-    .replace(/\bBlack hole\b/gi, 'super gravitational black hole (so strong even your CPF cannot escape)')
-    .replace(/\bSupernova\b/gi, 'exploding supernova star (boom like National Day fireworks)')
-    .replace(/\bTelescope\b/gi, 'high-tech giant telescope')
-    .replace(/\bIn fact,\b/gi, 'Actually hor,')
-    .replace(/\bHowever,\b/gi, 'But wait ah,')
-    .replace(/\bTherefore,\b/gi, 'So the moral of the story is,')
-    .replace(/\bAs a result,\b/gi, 'End up hor,');
+  // Natural sentence-level Singlish conversion without repetitive catchphrases
+  const sentences = cleanExp.split(/(?<=[.?!])\s+/);
+  const translated = sentences.map((sentence, idx) => {
+    let s = sentence
+      .replace(/\bIn this image\b/gi, 'Looking at this picture')
+      .replace(/\bThis image shows\b/gi, 'This photo is showing')
+      .replace(/\bAstronomers believe\b/gi, 'Astronomers reckon that')
+      .replace(/\bAstronomers have found\b/gi, 'The astronomers discovered')
+      .replace(/\bScientists discovered\b/gi, 'Scientists found out')
+      .replace(/\bLight-years away\b/gi, 'light-years away from Earth')
+      .replace(/\bMillion years\b/gi, 'millions of years')
+      .replace(/\bBillions of years\b/gi, 'billions of years')
+      .replace(/\bVery hot\b/gi, 'super hot, hotter than midday sun')
+      .replace(/\bVery bright\b/gi, 'really bright and glowing')
+      .replace(/\bVery large\b/gi, 'massive until cannot imagine')
+      .replace(/\bBlack hole\b/gi, 'superdense black hole')
+      .replace(/\bSupernova\b/gi, 'supernova star explosion')
+      .replace(/\bIn fact,\b/gi, 'Actually,')
+      .replace(/\bHowever,\b/gi, 'However hor,')
+      .replace(/\bTherefore,\b/gi, 'So basically,')
+      .replace(/\bAs a result,\b/gi, 'Because of that,');
 
-  const intro = `Wah lau eh! Check out this NASA view from ${date} called "${title}". Solid sia! Let uncle/auntie break it down for you in proper Singapore style.`;
-  const closing = `\n\n🇸🇬 **Kopitiam Takeaway:** The universe is sibei vast and beautiful lah! When you look up at night from your HDB corridor or East Coast Park, remember we are all floating on one small sunny island in this huge cosmic void. Swee swee, don't play play!`;
+    if (idx === 0 && !s.endsWith('lah.') && !s.endsWith('leh.')) {
+      s = s.replace(/\.$/, ' lah.');
+    } else if (idx === 2 && !s.endsWith('lor.')) {
+      s = s.replace(/\.$/, ' lor.');
+    }
+    return s;
+  });
 
-  return `${intro}\n\n${transformed}${closing}`;
+  const translation = translated.join(' ');
+
+  let hash = 0;
+  for (let i = 0; i < date.length; i++) {
+    hash = (hash * 31 + date.charCodeAt(i)) % RELATABLE_SINGAPORE_QUOTES.length;
+  }
+  const quote = RELATABLE_SINGAPORE_QUOTES[Math.abs(hash)];
+  const summary = `NASA recorded "${title}" on ${date}, showing the celestial wonders of outer space lah.`;
+  const singlish = `${translation}\n\n🇸🇬 **Relatable Singapore Saying:**\n"${quote}"\n\n**Quick Takeaway:** ${summary}`;
+
+  return {
+    translation,
+    summary,
+    quote,
+    singlish,
+    source: 'fallback',
+  };
 }
 
 /**
@@ -54,16 +92,19 @@ export async function fetchSinglishExplanation(
   date: string,
   explanation: string
 ): Promise<SinglishResult> {
-  const cacheKey = `singlish_apod_${date}`;
+  const cacheKey = `singlish_apod_v2_${date}`;
 
   // Check localStorage cache
   try {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       const parsed = JSON.parse(cached);
-      if (parsed && typeof parsed.singlish === 'string' && parsed.singlish.length > 20) {
+      if (parsed && typeof parsed.translation === 'string' && typeof parsed.quote === 'string') {
         return {
-          singlish: parsed.singlish,
+          translation: parsed.translation,
+          summary: parsed.summary || '',
+          quote: parsed.quote,
+          singlish: parsed.singlish || `${parsed.translation}\n\n"${parsed.quote}"`,
           source: 'cache',
         };
       }
@@ -87,18 +128,23 @@ export async function fetchSinglishExplanation(
 
     if (response.ok) {
       const data = await response.json();
-      if (data && data.singlish) {
+      if (data && (data.translation || data.singlish)) {
+        const result: SinglishResult = {
+          translation: data.translation || data.singlish,
+          summary: data.summary || '',
+          quote: data.quote || 'Steady pom pi pi — the universe is calm and wondrous lah.',
+          singlish: data.singlish || `${data.translation}\n\n"${data.quote}"`,
+          source: data.source || 'gemini',
+        };
+
         // Cache result
         try {
-          localStorage.setItem(cacheKey, JSON.stringify(data));
+          localStorage.setItem(cacheKey, JSON.stringify(result));
         } catch {
           // ignore cache write errors
         }
 
-        return {
-          singlish: data.singlish,
-          source: data.source || 'gemini',
-        };
+        return result;
       }
     }
   } catch (err) {
@@ -106,9 +152,5 @@ export async function fetchSinglishExplanation(
   }
 
   // Fallback
-  const fallback = generateClientFallbackSinglish(title, date, explanation);
-  return {
-    singlish: fallback,
-    source: 'fallback',
-  };
+  return generateClientFallbackSinglish(title, date, explanation);
 }
