@@ -19,6 +19,10 @@ import {
   SUPPORTED_COUNTRIES,
 } from '../services/holidayService';
 import {
+  fetchSinglishExplanation,
+  SinglishResult,
+} from '../services/singlishService';
+import {
   Sparkles,
   Maximize2,
   Bookmark,
@@ -41,6 +45,9 @@ import {
   BookOpen,
   PartyPopper,
   Globe,
+  RefreshCw,
+  Copy,
+  Languages,
 } from 'lucide-react';
 
 interface ResultScreenProps {
@@ -71,6 +78,13 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   const [activeTab, setActiveTab] = useState<TabType>('story');
   const [isPlayingNarration, setIsPlayingNarration] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Singlish Explanation State
+  const [singlishData, setSinglishData] = useState<SinglishResult | null>(null);
+  const [isLoadingSinglish, setIsLoadingSinglish] = useState(false);
+  const [isPlayingSinglishNarration, setIsPlayingSinglishNarration] = useState(false);
+  const [copiedSinglish, setCopiedSinglish] = useState(false);
+  const [explanationViewMode, setExplanationViewMode] = useState<'both' | 'singlish' | 'nasa'>('both');
 
   // Terrestrial Holiday State
   const [selectedCountry, setSelectedCountry] = useState<string>(() => {
@@ -146,13 +160,42 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   useEffect(() => {
     stopSpeaking();
     setIsPlayingNarration(false);
+    setIsPlayingSinglishNarration(false);
   }, [item.date]);
+
+  // Fetch Singlish translation when date/title/explanation changes
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingSinglish(true);
+    stopSpeaking();
+    setIsPlayingNarration(false);
+    setIsPlayingSinglishNarration(false);
+
+    fetchSinglishExplanation(item.title, item.date, item.explanation)
+      .then((res) => {
+        if (isMounted) {
+          setSinglishData(res);
+          setIsLoadingSinglish(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setIsLoadingSinglish(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [item.date, item.title, item.explanation]);
 
   const handleToggleNarration = () => {
     if (isPlayingNarration) {
       stopSpeaking();
       setIsPlayingNarration(false);
     } else {
+      stopSpeaking();
+      setIsPlayingSinglishNarration(false);
       const fullText = `${item.title}. Recorded on ${formatFriendlyDate(item.date)}. ${item.explanation}`;
       const started = speakText(
         fullText,
@@ -164,6 +207,49 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
         setIsPlayingNarration(true);
       }
     }
+  };
+
+  const handleToggleSinglishNarration = () => {
+    if (isPlayingSinglishNarration) {
+      stopSpeaking();
+      setIsPlayingSinglishNarration(false);
+    } else {
+      if (!singlishData?.singlish) return;
+      stopSpeaking();
+      setIsPlayingNarration(false);
+      const cleanSinglish = singlishData.singlish.replace(/\*\*/g, '').replace(/🇸🇬/g, '');
+      const started = speakText(
+        cleanSinglish,
+        () => setIsPlayingSinglishNarration(true),
+        () => setIsPlayingSinglishNarration(false),
+        () => setIsPlayingSinglishNarration(false),
+        { rate: 1.02 }
+      );
+      if (started) {
+        setIsPlayingSinglishNarration(true);
+      }
+    }
+  };
+
+  const handleCopySinglish = () => {
+    if (!singlishData?.singlish) return;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(singlishData.singlish);
+      setCopiedSinglish(true);
+      setTimeout(() => setCopiedSinglish(false), 2200);
+    }
+  };
+
+  const handleRegenerateSinglish = async () => {
+    try {
+      localStorage.removeItem(`singlish_apod_${item.date}`);
+    } catch {
+      // ignore
+    }
+    setIsLoadingSinglish(true);
+    const fresh = await fetchSinglishExplanation(item.title, item.date, item.explanation);
+    setSinglishData(fresh);
+    setIsLoadingSinglish(false);
   };
 
   const handleShareLink = () => {
@@ -481,17 +567,237 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                 </button>
               </div>
 
-              {/* Scientific Explanation (Per design system: body-md Inter with generous line-height) */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#d6c4ac]/60">
-                  NASA Astronomical Explanation
-                </h4>
-                <div className="text-sm sm:text-base text-[#e4dffc]/95 leading-relaxed font-normal space-y-3 font-sans">
-                  {item.explanation.split('\n\n').map((para, idx) => (
-                    <p key={idx}>{para.replace(/^Explanation:\s*/i, '')}</p>
-                  ))}
+              {/* Explanation Editions Switcher */}
+              <div className="pt-2 border-t border-white/10 flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-[#d6c4ac]/80 font-medium">
+                  <Languages className="w-3.5 h-3.5 text-[#faabff]" />
+                  <span>Language Editions:</span>
+                </div>
+                <div className="flex rounded-full bg-[#161326] p-0.5 border border-white/10 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setExplanationViewMode('both')}
+                    className={`px-2.5 py-1 rounded-full font-medium transition-all cursor-pointer ${
+                      explanationViewMode === 'both'
+                        ? 'bg-[#ffd79b] text-[#432c00] font-semibold shadow'
+                        : 'text-[#d6c4ac] hover:text-white'
+                    }`}
+                  >
+                    Both (NASA + 🇸🇬 Singlish)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExplanationViewMode('singlish')}
+                    className={`px-2.5 py-1 rounded-full font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                      explanationViewMode === 'singlish'
+                        ? 'bg-[#bd06da] text-white font-semibold shadow'
+                        : 'text-[#d6c4ac] hover:text-white'
+                    }`}
+                  >
+                    <span>🇸🇬 Singlish Only</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExplanationViewMode('nasa')}
+                    className={`px-2.5 py-1 rounded-full font-medium transition-all cursor-pointer ${
+                      explanationViewMode === 'nasa'
+                        ? 'bg-[#2a273d] text-[#ffd79b] font-semibold shadow border border-white/10'
+                        : 'text-[#d6c4ac] hover:text-white'
+                    }`}
+                  >
+                    NASA English Only
+                  </button>
                 </div>
               </div>
+
+              {/* 1. NASA Astronomical Explanation */}
+              {(explanationViewMode === 'both' || explanationViewMode === 'nasa') && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-[#d6c4ac]/70 flex items-center gap-2">
+                      <span>NASA Astronomical Explanation</span>
+                      <span className="text-[10px] font-mono bg-white/5 border border-white/10 text-[#ffd79b] px-1.5 py-0.5 rounded">
+                        Archival English
+                      </span>
+                    </h4>
+                  </div>
+                  <div className="text-sm sm:text-base text-[#e4dffc]/95 leading-relaxed font-normal space-y-3 font-sans">
+                    {item.explanation.split('\n\n').map((para, idx) => (
+                      <p key={idx}>{para.replace(/^Explanation:\s*/i, '')}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Singapore (Singlish) Astronomical Breakdown - Right below NASA Explanation */}
+              {(explanationViewMode === 'both' || explanationViewMode === 'singlish') && (
+                <div
+                  id="singapore-singlish-explanation"
+                  className="rounded-2xl p-4 sm:p-5 bg-gradient-to-br from-[#2c1a3b]/90 via-[#1e172e]/95 to-[#161224] border border-[#faabff]/35 shadow-xl relative overflow-hidden space-y-3.5 transition-all mt-4"
+                >
+                  {/* Ambient accent background blur */}
+                  <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#bd06da]/15 rounded-full blur-2xl pointer-events-none" />
+
+                  {/* Header Row */}
+                  <div className="flex flex-wrap items-start justify-between gap-3 relative z-10">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-[#bd06da]/25 border border-[#faabff]/50 flex items-center justify-center text-base shadow-sm shrink-0 mt-0.5">
+                        🇸🇬
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs sm:text-sm font-bold text-[#faabff] tracking-wide">
+                            Singapore (Singlish) Cosmic Breakdown
+                          </h4>
+                          <span className="text-[10px] font-semibold bg-[#ffd79b]/15 text-[#ffd79b] border border-[#ffd79b]/30 px-2 py-0.5 rounded-full font-mono">
+                            Kopitiam Edition
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#d6c4ac]/80 mt-0.5">
+                          NASA explanation translated into authentic Singapore Singlish so everyone can understand steady-steady
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action Bar */}
+                    <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                      {/* Audio listen button */}
+                      <button
+                        type="button"
+                        id="btn-listen-singlish"
+                        onClick={handleToggleSinglishNarration}
+                        disabled={isLoadingSinglish || !singlishData?.singlish}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                          isPlayingSinglishNarration
+                            ? 'bg-[#faabff] text-[#4a0058] shadow-[0_0_12px_rgba(250,171,255,0.5)] animate-pulse'
+                            : 'bg-[#bd06da]/30 hover:bg-[#bd06da]/50 text-[#faabff] border border-[#faabff]/40'
+                        } disabled:opacity-50`}
+                        title="Listen to Singlish narration"
+                      >
+                        {isPlayingSinglishNarration ? (
+                          <>
+                            <Square className="w-3 h-3 text-[#4a0058]" />
+                            <span>Stop Audio</span>
+                          </>
+                        ) : (
+                          <>
+                            <Volume2 className="w-3 h-3" />
+                            <span>Listen Singlish</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Copy Singlish text */}
+                      <button
+                        type="button"
+                        id="btn-copy-singlish"
+                        onClick={handleCopySinglish}
+                        disabled={isLoadingSinglish || !singlishData?.singlish}
+                        className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[#d6c4ac] hover:text-white border border-white/10 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Copy Singlish explanation"
+                      >
+                        {copiedSinglish ? (
+                          <Check className="w-3.5 h-3.5 text-green-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+
+                      {/* Regenerate Singlish */}
+                      <button
+                        type="button"
+                        id="btn-regenerate-singlish"
+                        onClick={handleRegenerateSinglish}
+                        disabled={isLoadingSinglish}
+                        className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[#d6c4ac] hover:text-white border border-white/10 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Regenerate Singlish translation"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isLoadingSinglish ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Body Content */}
+                  {isLoadingSinglish ? (
+                    <div className="py-6 px-4 text-center rounded-xl bg-black/20 border border-white/5 space-y-2">
+                      <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#faabff]/15 text-[#faabff] animate-spin">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <p className="text-xs font-medium text-[#faabff]">
+                        Brewing kopi-c and converting NASA cosmos to Singlish...
+                      </p>
+                      <p className="text-[11px] text-[#d6c4ac]/60">
+                        Gathering local celestial slang (lah, leh, lor, swee sia, steady)
+                      </p>
+                    </div>
+                  ) : singlishData?.singlish ? (
+                    <div className="space-y-3 relative z-10">
+                      {singlishData.singlish.split('\n\n').map((para, pIdx) => {
+                        const isTakeaway =
+                          para.includes('Kopitiam Takeaway:') ||
+                          para.includes('Takeaway:');
+
+                        if (isTakeaway) {
+                          return (
+                            <div
+                              key={pIdx}
+                              className="mt-3 p-3.5 rounded-xl bg-[#ffd79b]/10 border border-[#ffd79b]/40 text-[#ffd79b] text-xs sm:text-sm font-medium leading-relaxed flex items-start gap-2.5 shadow-sm"
+                            >
+                              <span className="text-lg shrink-0">☕</span>
+                              <div>
+                                <span className="font-bold block text-white mb-0.5">
+                                  🇸🇬 Kopitiam Astronomer Takeaway:
+                                </span>
+                                <span className="text-[#e4dffc]">
+                                  {para
+                                    .replace(/^.*Kopitiam Takeaway:\s*/i, '')
+                                    .replace(/^\*\*/g, '')
+                                    .replace(/\*\*$/g, '')}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <p
+                            key={pIdx}
+                            className="text-xs sm:text-sm text-[#e4dffc]/95 leading-relaxed font-normal"
+                          >
+                            {para}
+                          </p>
+                        );
+                      })}
+
+                      {/* Singlish Tag Chips */}
+                      <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[10px] text-[#d6c4ac]/70">
+                        <div className="flex flex-wrap gap-1.5">
+                          <span className="px-2 py-0.5 rounded-full bg-[#bd06da]/20 text-[#faabff] border border-[#faabff]/30 font-mono">
+                            ✦ Wah Lau Eh
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-[#ffd79b]/15 text-[#ffd79b] border border-[#ffd79b]/30 font-mono">
+                            ✦ Swee Lah
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-[#00d5ed]/15 text-[#85edff] border border-[#00d5ed]/30 font-mono">
+                            ✦ Solid Sia
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-white/5 text-[#d6c4ac] border border-white/10 font-mono">
+                            ✦ Don&apos;t Play Play
+                          </span>
+                        </div>
+
+                        <span className="font-mono text-[#faabff]/80">
+                          {singlishData.source === 'gemini' ? '✦ Powered by Gemini AI' : '✦ Kopitiam Engine'}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[#d6c4ac]">
+                      No Singlish explanation available for this date.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Astronomical Metadata Chips */}
               <div className="pt-4 border-t border-white/10 flex flex-wrap gap-2 text-xs">

@@ -116,7 +116,8 @@ export function speakText(
   text: string,
   onStart?: () => void,
   onEnd?: () => void,
-  onError?: () => void
+  onError?: () => void,
+  options?: { rate?: number; pitch?: number }
 ): boolean {
   if (!('speechSynthesis' in window)) {
     return false;
@@ -126,12 +127,13 @@ export function speakText(
 
   const cleanText = text.replace(/^Explanation:\s*/i, '');
   const utterance = new SpeechSynthesisUtterance(cleanText);
-  utterance.rate = 0.95; // Calm, meditative pace
-  utterance.pitch = 1.0;
+  utterance.rate = options?.rate ?? 0.95; // Calm pace by default, or lively for Singlish
+  utterance.pitch = options?.pitch ?? 1.0;
 
-  // Try to pick a natural English voice if available
+  // Try to pick a natural English voice if available (look for Singapore en-SG if available!)
   const voices = window.speechSynthesis.getVoices();
-  const naturalVoice = voices.find(
+  const sgVoice = voices.find(v => v.lang === 'en-SG' || v.lang.startsWith('en_SG'));
+  const naturalVoice = sgVoice || voices.find(
     v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha'))
   ) || voices.find(v => v.lang.startsWith('en'));
 
